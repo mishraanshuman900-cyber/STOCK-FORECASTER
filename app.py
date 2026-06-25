@@ -8,7 +8,7 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import warnings
 from datetime import datetime, timedelta
 
-# Hide statistical warnings for a clean terminal
+# Hide statistical warnings 
 warnings.filterwarnings('ignore')
 
 # --- PAGE CONFIGURATION ---
@@ -22,12 +22,10 @@ st.set_page_config(
 # --- PREMIUM DARK MODE CSS ---
 st.markdown("""
     <style>
-    /* Main App Background */
     .stApp {
         background-color: #0e1117;
         color: #fafafa;
     }
-    /* Buttons */
     div.stButton > button:first-child {
         background-color: #00f2fe;
         color: #000000;
@@ -39,7 +37,6 @@ st.markdown("""
         background-color: #4facfe;
         color: #ffffff;
     }
-    /* Metric Containers */
     [data-testid="stMetricValue"] {
         color: #00f2fe;
     }
@@ -49,28 +46,31 @@ st.markdown("""
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("⚙️ Model Configuration")
 
-# Timeline Selection
-duration_years = st.sidebar.slider("Historical Data Range (Years)", min_value=1, max_value=10, value=3)
+# Timeline Selection - Expanded to capture up to 20 years of historical cycles
+duration_years = st.sidebar.slider("Historical Baseline Range (Years)", min_value=5, max_value=20, value=10)
 end_date = datetime.today()
 start_date = end_date - timedelta(days=duration_years * 365)
 
-# Forecasting Fine-Tuning Hyperparameters
+# Forecasting Macro Fine-Tuning 
 st.sidebar.markdown("### Fine-Tuning")
-forecast_days = st.sidebar.slider("Forecast Horizon (Days)", min_value=5, max_value=90, value=30)
-trend_type = st.sidebar.selectbox("Trend Component", ["additive", "damped", "none"], index=1)
-use_boxcox = st.sidebar.checkbox("Apply Box-Cox Transform (Stabilizes variance)", value=False)
+forecast_years = st.sidebar.slider("Forecast Horizon (Years)", min_value=1, max_value=5, value=5)
+
+# Convert chosen calendar years to structural business trading days (252 days/year)
+forecast_days = int(forecast_years * 252)
+
+trend_type = st.sidebar.selectbox("Trend Component", ["additive", "damped", "none"], index=0)
+use_boxcox = st.sidebar.checkbox("Apply Box-Cox Transform (Stabilizes long-term variance)", value=True)
 
 # --- MAIN INTERFACE ---
-st.title("🏛️ Professional Stock Analyzer & Forecaster")
-st.markdown("Search global equities using Yahoo Finance tickers to analyze price distribution and generate advanced time-series projections.")
+st.title("🏛️ Professional Stock Analyzer & Forecaster (5-Year Outlook)")
+st.markdown("Search global equities using Yahoo Finance tickers to analyze price distribution and generate macro-level time-series projections.")
 
 # Search Bar for Stock Ticker
 ticker_input = st.text_input("🔍 Enter Stock Ticker Symbol (e.g., AAPL, MSFT, NVDA, TSLA):", value="AAPL").strip().upper()
 
 if ticker_input:
     try:
-        # Fetch data via yfinance
-        with st.spinner(f"Fetching market data for {ticker_input}..."):
+        with st.spinner(f"Fetching structural market data for {ticker_input}..."):
             stock = yf.Ticker(ticker_input)
             df = stock.history(start=start_date, end=end_date)
             info = stock.info
@@ -82,12 +82,11 @@ if ticker_input:
         df = pd.DataFrame()
 
     if not df.empty:
-        # Asset Metadata Header
         company_name = info.get('longName', ticker_input)
         currency = info.get('currency', 'USD')
         st.success(f"Connected to live feed for **{company_name}** ({ticker_input})")
         
-        # Extract closing prices for analysis
+        # Extract closing values
         data_series = df['Close'].dropna()
         latest_price = data_series.iloc[-1]
         
@@ -95,11 +94,10 @@ if ticker_input:
         mean_val = data_series.mean()
         median_val = data_series.median()
         
-        # Symmetry validation (within a 5% margin)
         threshold = 0.05 * mean_val
         is_symmetric = abs(mean_val - median_val) <= threshold
 
-        # Display Top Summary Metrics
+        # Summary Display Metrics
         m1, m2, m3 = st.columns(3)
         with m1:
             st.metric(label="Latest Closing Price", value=f"{latest_price:,.2f} {currency}")
@@ -108,7 +106,6 @@ if ticker_input:
         with m3:
             st.metric(label="Historical Median", value=f"{median_val:,.2f}")
 
-        # Assessment Notice
         if is_symmetric:
             st.info("ℹ️ **Distribution Assessment:** The historical mean and median are closely aligned, showing balanced price consolidation zones.")
         else:
@@ -118,12 +115,10 @@ if ticker_input:
         tab1, tab2 = st.tabs(["📉 Price Forecast Engine", "📊 Distribution & Spread"])
 
         with tab1:
-            st.subheader("Predictive Analytics Line")
+            st.subheader(f"{forecast_years}-Year Predictive Analytics Horizon")
             
-            # --- FINE-TUNED EXPONENTIAL SMOOTHING FORECAST ---
-            with st.spinner("Optimizing algorithmic parameters..."):
+            with st.spinner("Optimizing algorithmic parameters for multi-year projection..."):
                 try:
-                    # Configure trend based on user selection
                     if trend_type == "damped":
                         fit_trend = "add"
                         damped_setting = True
@@ -134,41 +129,40 @@ if ticker_input:
                         fit_trend = None
                         damped_setting = False
 
-                    # Fit Holt-Winters model optimized for asset trends
+                    # Fit Holt-Winters model optimized for macro trends
                     model = ExponentialSmoothing(
                         data_series.values, 
                         trend=fit_trend, 
                         damped_trend=damped_setting,
                         seasonal=None,
-                        use_boxcox=use_boxcox
+                        use_boxcox=True if use_boxcox else False
                     )
                     fit_model = model.fit(optimized=True)
                     forecast_values = fit_model.forecast(forecast_days)
                     
-                    # Generate timeline indices mapping back to real business days
+                    # Generate multi-year dates mapping back to real business days
                     last_date = data_series.index[-1]
                     forecast_dates = pd.date_range(start=last_date + timedelta(days=1), periods=forecast_days, freq='B')
 
-                    # Build high-fidelity Plotly figure
+                    # Build High-Fidelity Chart
                     fig = go.Figure()
                     
-                    # Historical Data Stream (Neon Cyan)
+                    # Historical Data (Neon Cyan)
                     fig.add_trace(go.Scatter(
                         x=data_series.index, y=data_series.values,
                         mode='lines', name='Historical Close',
                         line=dict(color='#00f2fe', width=2)
                     ))
                     
-                    # Predictive Forecast Stream (Neon Magenta)
+                    # Macro Forecast (Neon Magenta)
                     fig.add_trace(go.Scatter(
                         x=forecast_dates, y=forecast_values,
-                        mode='lines', name='Algorithmic Projection',
+                        mode='lines', name=f'{forecast_years}-Year Algorithmic Projection',
                         line=dict(color='#fe0979', width=3, dash='dash')
                     ))
                     
-                    # Properly configured layout with dark theme
                     fig.update_layout(
-                        title=f"{company_name} ({ticker_input}) Forward Horizon Projection",
+                        title=f"{company_name} ({ticker_input}) Multi-Year Forward Horizon Projection",
                         xaxis_title="Timeline",
                         yaxis_title=f"Price ({currency})",
                         hovermode="x unified",
@@ -191,7 +185,6 @@ if ticker_input:
         with tab2:
             st.subheader("Asset Volatility & Density Spread")
             
-            # Professional Density Histogram with Marginal Boxplot (Emerald Green)
             fig_hist = px.histogram(
                 df, x="Close", 
                 nbins=40,
